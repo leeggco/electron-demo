@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Electron</title>
+  </head>
+  <body>
+    <h1>Hello Electron!</h1>
+    <audio>
+      您的浏览器不支持 audio 标签。
+    </audio>
+
+    <video autoplay width="100px" height="100px">您的浏览器不支持 video 标签。</video>
+    <script type = "text/javascript">
+      // 屏幕画面&系统声音
+      async function startCapture(displayMediaOptions) {
+        let captureStream = null;
+
+        try {
+          captureStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+        } catch(err) {
+          console.error("Error: " + err);
+        }
+        return captureStream;
+      }
+      console.log(startCapture({ video: true, audio: true }))
+    </script>
+  </body>
+</html>
