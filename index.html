@@ -5,25 +5,59 @@
     <title>Electron</title>
   </head>
   <body>
-    <h1>Hello Electron!</h1>
     <audio>
       您的浏览器不支持 audio 标签。
     </audio>
+    <div class="toolbar">
+      <span id="status"></span>
+      <button id="startButton">开始</button>
+      <button id="stopButton">停止</button>
+    </div>
 
     <video autoplay width="100px" height="100px">您的浏览器不支持 video 标签。</video>
     <script type = "text/javascript">
-      // 屏幕画面&系统声音
-      async function startCapture(displayMediaOptions) {
-        let captureStream = null;
+      const ffmpeg = require('fluent-ffmpeg')
+      const ffmpegPath = 'E:/ffmpeg/bin/ffmpeg.exe'
+      const outputPath = 'rtmp://push.leeggco.com/live/33?txSecret=77a3c890ab2a25365a274f1e7d74a15a&txTime=5DBC567F'
+      command = ffmpeg()
+        .setFfmpegPath(ffmpegPath)
+        // .input('desktop')
+        // .inputFormat('gdigrab')
+        .input('audio=virtual-audio-capturer')
+        .inputFormat('dshow')
+        .addOptions([
+          '-ar 48000',
+          '-acodec aac',
+          '-bsf:a aac_adtstoasc'
+        ])
+        .format('flv')
+        .output(outputPath, {
+          end: true
+        })
+        .on('start', function (commandLine) {
+          console.log('[' + new Date() + '] Vedio is Pushing !')
+          console.log('commandLine: ' + commandLine)
+        })
+        .on('error', function (err, stdout, stderr) {
+          console.log('error: ' + err.message)
+        })
+        .on('end', function () {
+          console.log('[' + new Date() + '] Vedio Pushing is Finished !')
+        })
 
-        try {
-          captureStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
-        } catch(err) {
-          console.error("Error: " + err);
-        }
-        return captureStream;
-      }
-      console.log(startCapture({ video: true, audio: true }))
+      const startButton = document.querySelector('#startButton')
+      const stopButton = document.querySelector('#stopButton')
+      const status = document.querySelector('#status')
+      startButton.addEventListener('click', function(e) {
+        console.log('开始！')
+        status.innerHTML = '直播中'
+        command.run()
+      })
+      stopButton.addEventListener('click', function(e) {
+        console.log('停止！')
+        status.innerHTML = '已停止'
+        command.kill()
+      })
     </script>
   </body>
 </html>
