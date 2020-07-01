@@ -1,5 +1,5 @@
-const { app, BrowserWindow } = require('electron')
-
+const { app, BrowserWindow, ipcMain } = require('electron')
+const ipc = ipcMain
 
 // 保持对window对象的全局引用，如果不这么做的话，当JavaScript对象被
 // 垃圾回收的时候，window对象将会自动的关闭
@@ -8,8 +8,10 @@ let win
 function createWindow () {
   // 创建浏览器窗口。
   win = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 620,
+    height: 500,
+    frame: false,
+    resizable: true,
     webPreferences: {
       nodeIntegration: true
     }
@@ -30,6 +32,22 @@ function createWindow () {
     win = null
   })
 }
+
+//登录窗口最小化
+ipc.on('window-min',function(){
+  win.minimize()
+})
+//登录窗口最大化
+ipc.on('window-max',function(){
+  if(win.isMaximized()){
+      win.restore()  
+  }else{
+      win.maximize() 
+  }
+})
+ipc.on('window-close',function(){
+  win.close()
+})
 
 // Electron 会在初始化后并准备
 // 创建浏览器窗口时，调用这个函数。

@@ -2,61 +2,161 @@
 <html>
   <head>
     <meta charset="UTF-8">
-    <title>Electron</title>
+    <title>SoundHole</title>
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
   </head>
   <body>
-    <audio>
-      您的浏览器不支持 audio 标签。
-    </audio>
-    <div class="toolbar">
-      <span id="status"></span>
-      <button id="startButton">开始</button>
-      <button id="stopButton">停止</button>
+    <div id="app">
+      <div>
+        <el-button @click="handleMin">最小化</el-button>
+        <el-button @click="handleClose">关闭</el-button>
+      </div>
+
+      <!-- 登陆页 -->
+      <div class="login" style="margin-top: 50px;" v-if="!isLogin">
+        <el-form :model="loginForm" status-icon :rules="rules" ref="loginForm" label-width="100px" class="demo-loginForm">
+          <el-form-item label="用户名">
+            <el-input type="text" v-model="loginForm.username" autocomplete="off" autofocus></el-input>
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input type="password" v-model="loginForm.password" autocomplete="off"></el-input>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="submitForm('loginForm')">提交</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <div class="main" v-if="isLogin">
+        <el-button type="primary" @click="pushFn" v-if="status === 'init'">连接</el-button>
+        <el-button type="warning" @click="stopFn" v-if="status === 'start'">断开</el-button>
+      </div>
     </div>
-
-    <video autoplay width="100px" height="100px">您的浏览器不支持 video 标签。</video>
-    <script type = "text/javascript">
+      
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <script>
+      const axios = require('axios')
       const ffmpeg = require('fluent-ffmpeg')
+      const storage = require('electron-localstorage')
       const ffmpegPath = 'E:/ffmpeg/bin/ffmpeg.exe'
-      const outputPath = 'rtmp://push.leeggco.com/live/33?txSecret=77a3c890ab2a25365a274f1e7d74a15a&txTime=5DBC567F'
-      command = ffmpeg()
-        .setFfmpegPath(ffmpegPath)
-        // .input('desktop')
-        // .inputFormat('gdigrab')
-        .input('audio=virtual-audio-capturer')
-        .inputFormat('dshow')
-        .addOptions([
-          '-ar 48000',
-          '-acodec aac',
-          '-bsf:a aac_adtstoasc'
-        ])
-        .format('flv')
-        .output(outputPath, {
-          end: true
-        })
-        .on('start', function (commandLine) {
-          console.log('[' + new Date() + '] Vedio is Pushing !')
-          console.log('commandLine: ' + commandLine)
-        })
-        .on('error', function (err, stdout, stderr) {
-          console.log('error: ' + err.message)
-        })
-        .on('end', function () {
-          console.log('[' + new Date() + '] Vedio Pushing is Finished !')
-        })
+      const ipc = require('electron').ipcRenderer
 
-      const startButton = document.querySelector('#startButton')
-      const stopButton = document.querySelector('#stopButton')
-      const status = document.querySelector('#status')
-      startButton.addEventListener('click', function(e) {
-        console.log('开始！')
-        status.innerHTML = '直播中'
-        command.run()
-      })
-      stopButton.addEventListener('click', function(e) {
-        console.log('停止！')
-        status.innerHTML = '已停止'
-        command.kill()
+      var app = new Vue({
+        el: '#app',
+        data: {
+          message: 'SoundHole',
+          isLogin: false,
+          status: 'init',
+          outputPath: '',
+          command: null,
+          loginForm: {},
+          rules: {}
+        },
+        methods: {
+          // 最小化
+          handleMin() {
+            ipc.send('window-min')
+          },
+          handleClose() {
+            ipc.send('window-close')
+          },
+          // 连接，推流
+          pushFn() {
+            this.command.run()
+            this.status = 'start'
+          },
+          // 停止，断流
+          stopFn() {
+            this.command.kill()
+            this.status = 'init'
+          },
+          // 提交登录表单
+          submitForm(formName) {
+            const params = this.loginForm
+            axios({
+              method: 'post',
+              url: 'http://122.51.248.81:3000/users/login',
+              data: params
+            }).then(res => {
+              console.log(res.data)
+              if (res.data.success) {
+                const profile = res.data.data
+                token = res.data.token
+                username = res.data.data.username
+                // 生成推流地址
+                axios({
+                  method: 'post',
+                  url: 'http://122.51.248.81:3000/flow/getPushUrl',
+                  headers: {
+                    authorization: token
+                  },
+                  data: {
+                    username: username
+                  }
+                }).then(res => {
+                  console.log(res)
+                  if (res.data.data.success) {
+                    this.outputPath = res.data.data.pushUrl
+                    this.command = this.ffCommand()
+                    // 保存token
+                    storage.setItem('token', token)
+                    storage.setItem('profile', profile)
+                    // 设置当前为登录状态
+                    this.isLogin = true
+                  }
+                })
+              }
+            })
+          },
+          // ffmpeg命令
+          ffCommand() {
+            return command = ffmpeg()
+            .setFfmpegPath(ffmpegPath)
+            //.input('desktop')
+            //.inputFormat('gdigrab')
+            .input('audio=virtual-audio-capturer')
+            .inputFormat('dshow')
+            .addOptions([
+              '-acodec libmp3lame',
+              '-ab 128k',
+              '-ar 44100',
+              '-ac 2'
+            ])
+            /* 
+              .addOptions([
+                '-ar 44100',
+                '-tune zerolatency',
+                '-b:a 128k',
+                '-acodec aac',
+                '-bsf:a aac_adtstoasc',
+                '-preset veryfast'
+              ])
+              -ab: 设置比特率(单位为bit/s)。
+              -aq quality: 设置音频质量（指定编码）。
+              -ar rate: 设置音频采样率（单位为Hz）。
+              -ac channels: 设置声道数。1就是单声道，2就是立体声。
+              -an: 取消音频轨。
+              -acodec codec: 指定音频编码('copy'代表不做音频转码)。
+              -vol volume: 设置录制音量大小（默认256）<百分比>。
+            */
+            .format('flv')
+            .output(this.outputPath, {
+              end: true
+            })
+            .on('start', function (commandLine) {
+              console.log('[' + new Date() + '] Vedio is Pushing !')
+              console.log('commandLine: ' + commandLine)
+            })
+            .on('error', function (err, stdout, stderr) {
+              console.log('error: ' + err.message)
+            })
+            .on('end', function () {
+              console.log('[' + new Date() + '] Vedio Pushing is Finished !')
+            })
+          }
+        }
       })
     </script>
   </body>
